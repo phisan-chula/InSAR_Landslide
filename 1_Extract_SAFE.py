@@ -32,7 +32,8 @@ def extract_from_zip(zip_filepath, file_to_extract=None, output_dir="."):
 
 
 #################################################################
-PATH_INT='./Phuket_INSAR_ISCE_BURST'
+PATH_INT='./InterferogramZip'
+#PATH_INT='./Phuket_INSAR_ISCE_BURST'
 
 CACHE = Path('./CACHE')
 CACHE.mkdir(parents=True, exist_ok=True)

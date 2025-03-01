@@ -107,9 +107,9 @@ class SBAS_Management:
 
     def _ASF_INSAR(self, s):
         P1 = r'^S1_\d{6}_IW\d_\d{8}_\d{8}_.*$'  # "S1_654321_IW9_20231201_20231231_other"
-        P2 = r'^(S1AA|S1AB|S1BA|S1BB)_IW_SLC__1SDV_\d{8}T\d{6}_\d{8}T\d{6}_[A-Z0-9]{6}_[A-Z0-9]{6}_[A-Z0-9]{4}$'
-        if bool(re.match(P1, s)):   self.INSAR = 'ISCE2_S1BURST'
-        elif bool(re.match(P2, s)): self.INSAR = 'GAMMA_S1FULL'
+        P2 = r"S1[A-Z]{2}_\d{8}T\d{6}_\d{8}T\d{6}_.*"
+        if bool(re.match(P1, s)):   self.INSAR = 'ISCE2_S1BURST',3
+        elif bool(re.match(P2, s)): self.INSAR = 'GAMMA_S1FULL',5   
         else:
             print( f'Unknown file pattern "{s}"...' ); raise 
 
@@ -137,10 +137,12 @@ class SBAS_Management:
                     pass #keep string
                 data[key] = value
         FMT = '%Y%m%dT%H%M%S'   # date + time
+        PROC,POS = self.INSAR 
         data['dt_reference'] = pd.to_datetime(data['Reference Granule'].\
-                                        split('_')[3],format=FMT )
+                                        split('_')[POS],format=FMT )
         data['dt_secondary'] = pd.to_datetime(data['Secondary Granule'].\
-                                        split('_')[3],format=FMT )
+                                        split('_')[POS],format=FMT )
+        ##import pdb; pdb.set_trace()
         data['BL_days'] =  self.DELTA_days( data['dt_secondary'],data['dt_reference'] ) 
         return pd.DataFrame([data]) # Create a DataFrame from the dictionary
 
