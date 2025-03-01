@@ -15,7 +15,8 @@ import networkx as nx
 import tomllib
 
 class SBAS_Management:
-    def __init__(self):
+    def __init__(self,ARGS):
+        self.ARGS = ARGS
         self.ReadCONFIGtoml()
         CACHE = Path('./CACHE')
         CACHE.mkdir(parents=True, exist_ok=True)
@@ -76,20 +77,9 @@ class SBAS_Management:
         G = nx.Graph() 
         G.add_nodes_from(nodes)
         G.add_edges_from(edges)
-        # Access graph properties (example):
-        print( "Isolates : ", list(nx.isolates(G)) )
-        print("Number of nodes:", G.number_of_nodes())
-        print("Number of edges:", G.number_of_edges())
-        print("Nodes:", G.nodes())
-        print("Edges:", G.edges())
-        #components = [G.subgraph(c).copy() for c in nx.connected_components(G)]
-        #for idx,G in enumerate(components,start=1):
-        #    print(f"Component {idx}: Nodes: {G.nodes()} Edges: {G.edges()}")
-        #import pdb; pdb.set_trace()
-        # Get connected components
-        components = list(nx.connected_components(G))
-
+        #######################################################################
         # Assign separate layouts for each component
+        components = list(nx.connected_components(G))
         pos = {}
         for i, comp in enumerate(components):
             subgraph = G.subgraph(comp)
@@ -99,14 +89,35 @@ class SBAS_Management:
             for node in sub_pos:
                 pos[node] = sub_pos[node] + offset
         # Plot the graph
-        plt.figure(figsize=(8, 6))
-        nx.draw(G, pos, with_labels=True, node_color="lightblue", 
-                   edge_color="gray", node_size=800, font_size=12)
-        plt.title("Graph with Non-Overlapping Components")
-        plt.show()
+        #import pdb; pdb.set_trace()
+        if 1:
+            plt.figure(figsize=(8, 6))
+            nx.draw(G, pos, with_labels=True, node_color="lightblue", 
+                   alpha=0.5, edge_color="gray", node_size=800, font_size=12)
+            plt.title("Graph with Non-Overlapping Components")
+            plt.show()
+        #######################################################################
+        components = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        self.dfScene['nCompo'] = 0
+        self.dfSBAS['nCompo'] = 0
+        for idx,G in enumerate(components,start=0):
+            if self.ARGS.dump:
+                print(f"Component {idx}: Nodes: {G.nodes()} Edges: {G.edges()}")
+            else:
+                print(f"Component {idx}: Nodes: {G.number_of_nodes()} Edges: {G.number_of_edges()}")
+            for node in G.nodes:
+                if node in self.dfScene['scene_id'].values:
+                    self.dfScene.loc[self.dfScene['scene_id'] == node, 'nCompo'] = idx
+            for edge in G.edges:
+                mask1 = (self.dfSBAS['id_ref'] == edge[0]) & (self.dfSBAS['id_sec']==edge[1]) 
+                mask2 = (self.dfSBAS['id_ref'] == edge[1]) & (self.dfSBAS['id_sec']==edge[0]) 
+                self.dfSBAS.loc[mask1|mask2,'nCompo'] = idx
+        #import pdb; pdb.set_trace()
 
     def _ASF_INSAR(self, s):
-        P1 = r'^S1_\d{6}_IW\d_\d{8}_\d{8}_.*$'  # "S1_654321_IW9_20231201_20231231_other"
+        # ISCE Burst product  "S1_654321_IW9_20231201_20231231_*"
+        P1 = r'^S1_\d{6}_IW\d_\d{8}_\d{8}_.*$'  
+        # GAMMA product "S1AA_20241016T231111_20241028T231111_*"
         P2 = r"S1[A-Z]{2}_\d{8}T\d{6}_\d{8}T\d{6}_.*"
         if bool(re.match(P1, s)):   self.INSAR = 'ISCE2_S1BURST',3
         elif bool(re.match(P2, s)): self.INSAR = 'GAMMA_S1FULL',5   
@@ -137,33 +148,37 @@ class SBAS_Management:
                     pass #keep string
                 data[key] = value
         FMT = '%Y%m%dT%H%M%S'   # date + time
-        PROC,POS = self.INSAR 
+        PROCESSOR,POS = self.INSAR 
         data['dt_reference'] = pd.to_datetime(data['Reference Granule'].\
                                         split('_')[POS],format=FMT )
         data['dt_secondary'] = pd.to_datetime(data['Secondary Granule'].\
                                         split('_')[POS],format=FMT )
-        ##import pdb; pdb.set_trace()
         data['BL_days'] =  self.DELTA_days( data['dt_secondary'],data['dt_reference'] ) 
         return pd.DataFrame([data]) # Create a DataFrame from the dictionary
 
     def PlotShortBaseline(self):
+        import itertools
+        CYC = itertools.cycle( ['red', 'green', 'blue', 'yellow'] )
         FS = self.TOML.FONT # font size
         days = self.DELTA_days( self.dfSBAS.dt_reference.max(), 
                                 self.dfSBAS.dt_reference.min() )
         DESC = self.dfSBAS.Baseline.describe()
-        #import pdb; pdb.set_trace()
         fig,ax1 = plt.subplots(figsize=(10, 6))
         ax2 = ax1.twiny()
-        for i,row in self.dfSBAS.iterrows():
-            xs = [ row['dt_reference'], row['dt_secondary'] ]
-            ys = [ row['Baseline'],     row['Baseline']  ]
-            xs_=xs[0]+(xs[1]-xs[0])/2 ; ys_ = ys[0]
-            ax1.plot( xs,ys) 
-            ax1.scatter(xs,ys,s=50,ec='black', marker='o',fc='none',alpha=0.7)
-            ax1.text( xs_,ys_, row.PROD_ID, c='red', size=FS, ha='center' )
-            ax1.text( xs[0],ys[0], row.id_ref, size=FS,ha='right',va='top' )
-            ax1.text( xs[1],ys[1], row.id_sec, size=FS,ha='left',va='top' )
-            ax1.text( xs_,ys_, f'{row.BL_days}d', c='blue', size=FS, ha='center', va='top' )
+        for grp,row_grp in self.dfSBAS.groupby( 'nCompo' ):
+            c = next(CYC)
+            #import pdb; pdb.set_trace()
+            for i,row in row_grp.iterrows(): 
+                xs = [ row['dt_reference'], row['dt_secondary'] ]
+                ys = [ row['Baseline'],     row['Baseline']  ]
+                xs_=xs[0]+(xs[1]-xs[0])/2 ; ys_ = ys[0]
+                ax1.plot(xs,ys,color=c) 
+                ax1.scatter(xs,ys,s=50,ec=c, marker='o',fc='none',alpha=0.7)
+                ax1.text( xs_,ys_, row.PROD_ID, c=c, size=FS, ha='center' )
+                ax1.text( xs[0],ys[0], row.id_ref, c=c, size=FS,ha='right',va='top' )
+                ax1.text( xs[1],ys[1], row.id_sec, c=c, size=FS,ha='left',va='top' )
+                ax1.text( xs_,ys_, f'{row.BL_days}d', c=c, size=FS, ha='center', va='top' )
+                
         for dt in self.TOML.VLINE_DT:
             ax1.axvline( x=pd.to_datetime(dt) )
         ax1.set_xlabel('Date and Time')
@@ -182,7 +197,14 @@ class SBAS_Management:
 #################################################################
 #################################################################
 #################################################################
+import argparse
 if __name__=="__main__":
-    sbas = SBAS_Management()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d","--dump", action="store_true", 
+            help="dump nodes and edges for each component(s)")
+    ARGS = parser.parse_args()
+    #import pdb; pdb.set_trace()
+    sbas = SBAS_Management(ARGS)
     sbas.PlotNetworkX()
     sbas.PlotShortBaseline()
+    #import pdb; pdb.set_trace()
