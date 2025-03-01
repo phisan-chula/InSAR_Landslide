@@ -1,0 +1,6 @@
+#
+#
+#
+
+FILE_DT_FMT = 3,4,'%Y%m%d'     # ISCE2_S1BURST
+#FILE_DT_FMT = 1,2,'%Y%m%dT%H%M%S'   # GAMMA_FULL_S1
