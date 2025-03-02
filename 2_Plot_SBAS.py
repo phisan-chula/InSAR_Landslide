@@ -1,14 +1,14 @@
 #
 # 2_Plot_SBAS
 #
-import re
+import os,re
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 import subprocess
 import zipfile
-import os
+import itertools
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import networkx as nx
@@ -72,6 +72,7 @@ class SBAS_Management:
                     df.loc[ idx.name, 'BL0_meter'] = row.Baseline
 
     def PlotNetworkX(self):
+        print( f'Composing graph ....')
         nodes = list(self.dfScene.scene_id)
         edges = self.dfSBAS[['id_ref','id_sec']].values.tolist()
         G = nx.Graph() 
@@ -157,39 +158,53 @@ class SBAS_Management:
         return pd.DataFrame([data]) # Create a DataFrame from the dictionary
 
     def PlotShortBaseline(self):
-        import itertools
-        CYC = itertools.cycle( ['red', 'green', 'blue', 'yellow'] )
+        cmap = plt.get_cmap('tab10', 10)
+        colors = cmap(np.linspace(0, 1, 10))
+        CYC = itertools.cycle( colors )
+        #CYC = itertools.cycle( ['red', 'green', 'blue', 'yellow'] )
         FS = self.TOML.FONT # font size
-        days = self.DELTA_days( self.dfSBAS.dt_reference.max(), 
+        DAYS = self.DELTA_days( self.dfSBAS.dt_reference.max(), 
                                 self.dfSBAS.dt_reference.min() )
         DESC = self.dfSBAS.Baseline.describe()
+        NCOMPO = len(self.dfScene.nCompo.value_counts())
         fig,ax1 = plt.subplots(figsize=(10, 6))
         ax2 = ax1.twiny()
         for grp,row_grp in self.dfSBAS.groupby( 'nCompo' ):
-            c = next(CYC)
-            #import pdb; pdb.set_trace()
+            if NCOMPO>1: c = next(CYC)
             for i,row in row_grp.iterrows(): 
                 xs = [ row['dt_reference'], row['dt_secondary'] ]
-                ys = [ row['Baseline'],     row['Baseline']  ]
-                xs_=xs[0]+(xs[1]-xs[0])/2 ; ys_ = ys[0]
+                xs_= xs[0]+(xs[1]-xs[0])/2 
+                if NCOMPO==1: 
+                    c = next(CYC)
+                    BL0_ref = self.dfScene[ self.dfScene.scene_id==row.id_ref].iloc[0].BL0_meter
+                    BL0_sec = self.dfScene[ self.dfScene.scene_id==row.id_sec].iloc[0].BL0_meter
+                    ys = [ BL0_ref,  BL0_sec]
+                    ys_= ys[0]+(ys[1]-ys[0])/2 
+                else:
+                    ys = [ row['Baseline'],     row['Baseline']  ]
+                #import pdb; pdb.set_trace()
                 ax1.plot(xs,ys,color=c) 
-                ax1.scatter(xs,ys,s=50,ec=c, marker='o',fc='none',alpha=0.7)
                 ax1.text( xs_,ys_, row.PROD_ID, c=c, size=FS, ha='center' )
-                ax1.text( xs[0],ys[0], row.id_ref, c=c, size=FS,ha='right',va='top' )
-                ax1.text( xs[1],ys[1], row.id_sec, c=c, size=FS,ha='left',va='top' )
                 ax1.text( xs_,ys_, f'{row.BL_days}d', c=c, size=FS, ha='center', va='top' )
-                
+                if NCOMPO>1:
+                    ax1.scatter(xs,ys,s=100,ec=c, marker='o',fc='none',alpha=0.7)
+                    ax1.text( xs[0],ys[0], row.id_ref, c=c, size=FS,ha='right',va='top' )
+                    ax1.text( xs[1],ys[1], row.id_sec, c=c, size=FS,ha='left',va='top' )
+        if NCOMPO==1:
+            for i,row in self.dfScene.iterrows():
+                ax1.text( row['dt'], row.BL0_meter , row.scene_id, c='black', size=FS,ha='center',va='center' )
+                ax1.scatter( row['dt'], row.BL0_meter, s=400,ec='black', marker='o',fc='none',alpha=0.7)
         for dt in self.TOML.VLINE_DT:
             ax1.axvline( x=pd.to_datetime(dt) )
         ax1.set_xlabel('Date and Time')
         ax1.set_ylabel('BL_meter')
-        ax2.set_xlim( 0, days )
+        ax2.set_xlim( 0, DAYS )
         ax2.set_xlabel('Temporal Baseline (days)')
         # Format the y-axis to display dates and times correctly
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         ax1.xaxis.set_major_locator(mdates.AutoDateLocator()) #Auto-locate the dates.
         CNT,MIN,MAX = int(DESC['count']), int(DESC['min']), int(DESC['max'])
-        ax1.set_title(f'SBAS Interfergram scenes:{CNT},BL_min:{MIN}m., BL_max:{MAX}m.')
+        ax1.set_title(f'SBAS Interfergram compo:{NCOMPO} granules:{CNT} BL_min:{MIN}m. BL_max:{MAX}m.')
         ax1.grid(True)
         plt.tight_layout() # Improves plot layout
         plt.show()
