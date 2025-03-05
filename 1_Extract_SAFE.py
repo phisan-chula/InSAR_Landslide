@@ -8,6 +8,8 @@ import subprocess
 
 import zipfile
 import os
+import importlib
+from SBAS_mgmt import *
 
 def extract_from_zip(zip_filepath, file_to_extract=None, output_dir="."):
     try:
@@ -32,18 +34,30 @@ def extract_from_zip(zip_filepath, file_to_extract=None, output_dir="."):
 
 
 #################################################################
-PATH_INT='./InterferogramZip'
-#PATH_INT='./Phuket_INSAR_ISCE_BURST'
-
-CACHE = Path('./CACHE')
-CACHE.mkdir(parents=True, exist_ok=True)
-
-for fi in Path( PATH_INT).glob('*.zip'):
-    print( fi )
-    TXT = f'{fi.stem}/{fi.stem}.txt'
-    VERT_TIF = f'{fi.stem}/{fi.stem}_vert_disp.tif'
-    VERT_XML = f'{fi.stem}/{fi.stem}_vert_disp.tif.xml'
-    extract_from_zip(fi,  TXT     ,  CACHE )
-    #extract_from_zip(fi,  VERT_TIF,  CACHE )
-    #extract_from_zip(fi,  VERT_XML,  CACHE )
-    #import pdb; pdb.set_trace()
+###################################################################
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('TOML', help="TOML config file")
+    parser.add_argument("-d","--dump", action="store_true",
+            help="dump nodes and edges for each component(s)")
+    ARGS = parser.parse_args()    
+    #import pdb ;pdb.set_trace()
+    sbas = SBAS_Management( ARGS.TOML )
+    files_for_mintpy = ['.txt',
+                            '_water_mask.tif',
+                            '_corr.tif',
+                            '_conncomp.tif',
+                            '_unw_phase.tif',
+                            '_dem.tif',
+                            '_lv_theta.tif',
+                            '_lv_phi.tif']
+    PATH_UNZIP = sbas.TOML.RESULT / 'INTERFEROGRAM'
+    PATH_UNZIP.mkdir(parents=True,exist_ok=True)
+    import pdb; pdb.set_trace()
+    for fzip in sbas.TOML.INT_ZIP.glob('*.zip'):
+        print( fzip )
+        for fi_minpy in files_for_mintpy:
+            full = f'{fzip.stem}/{fzip.stem}{fi_minpy}'
+            print( f'extracting ...{full}') 
+            extract_from_zip(fzip, full, PATH_UNZIP )

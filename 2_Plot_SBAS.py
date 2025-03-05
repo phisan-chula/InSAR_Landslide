@@ -13,15 +13,16 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import networkx as nx
 import tomllib
+from SBAS_mgmt import *
 
-class SBAS_Management:
+class SBAS_Network( SBAS_Management ) :
     def __init__(self,ARGS):
         self.ARGS = ARGS
-        self.ReadCONFIGtoml()
-        CACHE = Path('./CACHE')
-        CACHE.mkdir(parents=True, exist_ok=True)
+        super().__init__(ARGS.TOML) 
         dfs =list()
-        for fi in CACHE.rglob('*.txt'):
+        #import pdb; pdb.set_trace()
+        TXT_PATH = self.TOML.RESULT / 'INTERFEROGRAM'  # unzip *.txt; *.tif
+        for fi in TXT_PATH.rglob('*.txt'):
             self._ASF_INSAR( fi.stem )
             print( f'{self.INSAR}:{fi.stem}...' )
             dfs.append( self.ReadASF_txt( fi ) )
@@ -43,18 +44,10 @@ class SBAS_Management:
                 return None  # Or handle missing dates as needed
         dfSBAS['id_ref'] = dfSBAS['dt_reference'].apply(lambda x: get_scene_id(x))
         dfSBAS['id_sec'] = dfSBAS['dt_secondary'].apply(lambda x: get_scene_id(x))
-        dfSBAS.to_csv( 'CACHE/dfSBAS.csv', sep='\t', index=False)
+        dfSBAS.to_csv( self.TOML.RESULT / 'dfSBAS.csv', sep='\t', index=False)
         self.dfSBAS = dfSBAS
         self.dfScene = dfScene
         self.CalcBaseline()
-
-    def ReadCONFIGtoml(self):
-        OPTIONAL = { 'VLINE_DT':None , 'FONT':12 }
-        with open("CONFIG.toml", "rb") as f:
-            data = tomllib.load(f)
-        self.TOML = pd.Series( data )
-        for key in OPTIONAL: 
-            if key not in self.TOML.keys(): self.TOML[key]=OPTIONAL[key]
 
     def CalcBaseline(self):
         df = self.dfScene
@@ -113,20 +106,6 @@ class SBAS_Management:
                 mask1 = (self.dfSBAS['id_ref'] == edge[0]) & (self.dfSBAS['id_sec']==edge[1]) 
                 mask2 = (self.dfSBAS['id_ref'] == edge[1]) & (self.dfSBAS['id_sec']==edge[0]) 
                 self.dfSBAS.loc[mask1|mask2,'nCompo'] = idx
-        #import pdb; pdb.set_trace()
-
-    def _ASF_INSAR(self, s):
-        # ISCE Burst product  "S1_654321_IW9_20231201_20231231_*"
-        P1 = r'^S1_\d{6}_IW\d_\d{8}_\d{8}_.*$'  
-        # GAMMA product "S1AA_20241016T231111_20241028T231111_*"
-        P2 = r"S1[A-Z]{2}_\d{8}T\d{6}_\d{8}T\d{6}_.*"
-        if bool(re.match(P1, s)):   self.INSAR = 'ISCE2_S1BURST',3
-        elif bool(re.match(P2, s)): self.INSAR = 'GAMMA_S1FULL',5   
-        else:
-            print( f'Unknown file pattern "{s}"...' ); raise 
-
-    def DELTA_days(self,dt1,dt2):
-        return round((dt1-dt2).total_seconds()/(3600*24))
 
     def ReadASF_txt(self, filepath ):
         #import pdb ; pdb.set_trace()
@@ -166,6 +145,7 @@ class SBAS_Management:
         DAYS = self.DELTA_days( self.dfSBAS.dt_reference.max(), 
                                 self.dfSBAS.dt_reference.min() )
         DESC = self.dfSBAS.Baseline.describe()
+        #import pdb; pdb.set_trace()
         NCOMPO = len(self.dfScene.nCompo.value_counts())
         fig,ax1 = plt.subplots(figsize=(10, 6))
         ax2 = ax1.twiny()
@@ -179,10 +159,9 @@ class SBAS_Management:
                     BL0_ref = self.dfScene[ self.dfScene.scene_id==row.id_ref].iloc[0].BL0_meter
                     BL0_sec = self.dfScene[ self.dfScene.scene_id==row.id_sec].iloc[0].BL0_meter
                     ys = [ BL0_ref,  BL0_sec]
-                    ys_= ys[0]+(ys[1]-ys[0])/2 
                 else:
                     ys = [ row['Baseline'],     row['Baseline']  ]
-                #import pdb; pdb.set_trace()
+                ys_= ys[0]+(ys[1]-ys[0])/2 
                 ax1.plot(xs,ys,color=c) 
                 ax1.text( xs_,ys_, row.PROD_ID, c=c, size=FS, ha='center' )
                 ax1.text( xs_,ys_, f'{row.BL_days}d', c=c, size=FS, ha='center', va='top' )
@@ -195,7 +174,14 @@ class SBAS_Management:
                 ax1.text( row['dt'], row.BL0_meter , row.scene_id, c='black', size=FS,ha='center',va='center' )
                 ax1.scatter( row['dt'], row.BL0_meter, s=400,ec='black', marker='o',fc='none',alpha=0.7)
         for dt in self.TOML.VLINE_DT:
-            ax1.axvline( x=pd.to_datetime(dt) )
+            ax1.axvline( x=pd.to_datetime(dt), color='black', linestyle=':' )
+        for pair in self.TOML.NEW_PAIRS:
+            fr = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[0], ['dt','BL0_meter'] ].iloc[0]
+            to = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[1], ['dt','BL0_meter'] ].iloc[0]
+            ax1.plot( [fr['dt'],to['dt']],[fr.BL0_meter,to.BL0_meter ],
+                        lw=5, color='black', linestyle='--',alpha=0.7) 
+            #print(pair)
+            #import pdb; pdb.set_trace()
         ax1.set_xlabel('Date and Time')
         ax1.set_ylabel('BL_meter')
         ax2.set_xlim( 0, DAYS )
@@ -215,11 +201,11 @@ class SBAS_Management:
 import argparse
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('TOML', help="TOML config file")
     parser.add_argument("-d","--dump", action="store_true", 
             help="dump nodes and edges for each component(s)")
     ARGS = parser.parse_args()
     #import pdb; pdb.set_trace()
-    sbas = SBAS_Management(ARGS)
+    sbas = SBAS_Network(ARGS)
     sbas.PlotNetworkX()
     sbas.PlotShortBaseline()
-    #import pdb; pdb.set_trace()
