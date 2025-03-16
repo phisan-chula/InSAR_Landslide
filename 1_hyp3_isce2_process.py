@@ -72,10 +72,10 @@ for pairs in sbas_pairs:
 ########################################################################
 #credentials = get_credentials('phisan-s2.')
 #import pdb ; pdb.set_trace()
-hyp3 = sdk.HyP3()
-#hyp3 = sdk.HyP3(username='',password='')
+#hyp3 = sdk.HyP3()
+hyp3 = sdk.HyP3(username='phisan',password='Pst1803phi')
 jobs = sdk.Batch()
-if 0:
+if 1:
     for reference, secondary in sbas_pairs:
         jobs += hyp3.submit_insar_isce_burst_job(
             granule1 = reference,
@@ -93,5 +93,6 @@ jobs = hyp3.find_jobs(name=project_name, start=start_of_today)
 if 0:
     insar_products = jobs.download_files(data_dir)
     insar_products = [sdk.util.extract_zipped_product(ii) for ii in insar_products]
+
 import pdb ;pdb.set_trace()
 

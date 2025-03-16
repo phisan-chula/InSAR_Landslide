@@ -84,7 +84,7 @@ class SBAS_Network( SBAS_Management ) :
                 pos[node] = sub_pos[node] + offset
         # Plot the graph
         #import pdb; pdb.set_trace()
-        if 1:
+        if self.ARGS.networkx:
             plt.figure(figsize=(8, 6))
             nx.draw(G, pos, with_labels=True, node_color="lightblue", 
                    alpha=0.5, edge_color="gray", node_size=800, font_size=12)
@@ -175,13 +175,7 @@ class SBAS_Network( SBAS_Management ) :
                 ax1.scatter( row['dt'], row.BL0_meter, s=400,ec='black', marker='o',fc='none',alpha=0.7)
         for dt in self.TOML.VLINE_DT:
             ax1.axvline( x=pd.to_datetime(dt), color='black', linestyle=':' )
-        for pair in self.TOML.NEW_PAIRS:
-            fr = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[0], ['dt','BL0_meter'] ].iloc[0]
-            to = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[1], ['dt','BL0_meter'] ].iloc[0]
-            ax1.plot( [fr['dt'],to['dt']],[fr.BL0_meter,to.BL0_meter ],
-                        lw=5, color='black', linestyle='--',alpha=0.7) 
-            #print(pair)
-            #import pdb; pdb.set_trace()
+        self.PlotNewPairs(ax1)
         ax1.set_xlabel('Date and Time')
         ax1.set_ylabel('BL_meter')
         ax2.set_xlim( 0, DAYS )
@@ -195,6 +189,15 @@ class SBAS_Network( SBAS_Management ) :
         plt.tight_layout() # Improves plot layout
         plt.show()
 
+    def PlotNewPairs(self,AX):
+        for pair in self.TOML.NEW_PAIRS:
+            fr = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[0], ['dt','BL0_meter'] ].iloc[0]
+            to = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[1], ['dt','BL0_meter'] ].iloc[0]
+            AX.plot( [fr['dt'],to['dt']],[fr.BL0_meter,to.BL0_meter ],
+                        lw=5, color='black', linestyle='--',alpha=0.7) 
+            import pdb; pdb.set_trace()
+        print(pair)
+
 #################################################################
 #################################################################
 #################################################################
@@ -202,6 +205,8 @@ import argparse
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('TOML', help="TOML config file")
+    parser.add_argument("-x","--networkx", action="store_true", 
+            help="plot networkX graph(s)")
     parser.add_argument("-d","--dump", action="store_true", 
             help="dump nodes and edges for each component(s)")
     ARGS = parser.parse_args()

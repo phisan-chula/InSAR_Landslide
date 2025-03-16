@@ -24,7 +24,6 @@ mintpy.plot = no
 mintpy.network.coherenceBased = no
 """
 
-
 def get_common_overlap(file_list: List[Union[str, Path]]) -> List[float]:
     """Get the common overlap of  a list of GeoTIFF files
     Arg:
@@ -45,7 +44,7 @@ def get_common_overlap(file_list: List[Union[str, Path]]) -> List[float]:
 def clip_hyp3_products_to_common_overlap(data_dir: Union[str, Path], 
                                     work_dir: Union[str, Path], 
                                     overlap: List[float]) -> None:
-    files_for_mintpy = [ #'_water_mask.tif',
+    files_for_mintpy = [ '_water_mask.tif',
                         '_corr.tif',
                         '_conncomp.tif',
                         '_unw_phase.tif',
@@ -64,8 +63,8 @@ def clip_hyp3_products_to_common_overlap(data_dir: Union[str, Path],
                      str(dst_file) ]
             cmd = ' '.join(cmd)
             print( cmd )
-            result = subprocess.run(cmd, shell=True, text=True,
-                          check=True, capture_output=True) #execute the command
+            result = subprocess.run(cmd, shell=True,
+                          capture_output=True) #execute the command
             #import pdb ;pdb.set_trace()
             print( result )
             print(f"gdal_translate completed successfully.")
@@ -97,9 +96,8 @@ if __name__ == "__main__":
         mintpy_config.write_text( MINTPY_CONFIG.format(data_dir=data_dir ) )
         CMD_MINTPY = f'smallbaselineApp.py --dir {work_dir} {mintpy_config}'
         print(CMD_MINTPY)
-        import pdb ;pdb.set_trace()
-        process = subprocess.run(
-                    CMD_MINTPY,
+        #import pdb ;pdb.set_trace()
+        process = subprocess.run( CMD_MINTPY,
                     shell=True,
                     capture_output=True,
                     text=True,
