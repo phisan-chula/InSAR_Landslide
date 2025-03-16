@@ -25,3 +25,17 @@ options:
   -x, --networkx  plot networkX graph(s)
   -d, --dump      dump nodes and edges for each component(s)
 ```
+
+
+```
+ python3 3_ts_Analysis.py -h
+usage: 3_ts_Analysis.py [-h] [-c] [-p] TOML
+
+positional arguments:
+  TOML           TOML config file
+
+options:
+  -h, --help     show this help message and exit
+  -c, --clip     clip dataset as DEM for MintPy processging
+  -p, --process  do process MintPy
+```
