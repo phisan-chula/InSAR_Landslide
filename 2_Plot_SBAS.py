@@ -27,15 +27,20 @@ class SBAS_Network( SBAS_Management ) :
             print( f'{self.INSAR}:{fi.stem}...' )
             dfs.append( self.ReadASF_txt( fi ) )
         dfSBAS = pd.concat( dfs,ignore_index=True )
-        dfSBAS = dfSBAS[['PROD_ID', 'BL_days', 'Baseline', 'dt_reference', 'dt_secondary']]
+        dfSBAS = dfSBAS[['PROD_ID', 'Reference Granule', 'Secondary Granule', 
+                         'BL_days', 'Baseline', 'dt_reference', 'dt_secondary']]
         print( dfSBAS )
         ####################################################################
-        dfScene = pd.concat( [ dfSBAS.dt_reference, dfSBAS.dt_secondary ] )
-        dfScene.sort_values(inplace=True)
+        RefGranule = dfSBAS[[ 'Reference Granule', 'dt_reference']]
+        RefGranule.columns = ['Granule','dt']
+        SecGranule = dfSBAS[[ 'Secondary Granule', 'dt_secondary']]
+        SecGranule.columns = ['Granule','dt']
+        dfScene = pd.concat( [ RefGranule,SecGranule ] )
+        dfScene.sort_values( by='dt', inplace=True)
         dfScene.drop_duplicates(inplace=True,ignore_index=True)
-        dfScene = pd.DataFrame(dfScene,columns=['dt'])
         dfScene.insert(0, 'scene_id', [f'{i:03d}' for i in range(len(dfScene))])
         dfScene['days_0'] = (dfScene['dt'] - dfScene['dt'].iloc[0]).dt.days
+        #import pdb ;pdb.set_trace()
         ####################################################################
         def get_scene_id(dt):
             try:
@@ -44,7 +49,9 @@ class SBAS_Network( SBAS_Management ) :
                 return None  # Or handle missing dates as needed
         dfSBAS['id_ref'] = dfSBAS['dt_reference'].apply(lambda x: get_scene_id(x))
         dfSBAS['id_sec'] = dfSBAS['dt_secondary'].apply(lambda x: get_scene_id(x))
-        dfSBAS.to_csv( self.TOML.RESULT / 'dfSBAS.csv', sep='\t', index=False)
+        SBAS_CSV = self.TOML.RESULT / 'dfSBAS.csv'
+        print( f'Writing dfSBAS.csv to {SBAS_CSV}...')
+        dfSBAS.to_csv( SBAS_CSV, sep='\t', index=False)
         self.dfSBAS = dfSBAS
         self.dfScene = dfScene
         self.CalcBaseline()
@@ -190,13 +197,15 @@ class SBAS_Network( SBAS_Management ) :
         plt.show()
 
     def PlotNewPairs(self,AX):
+        COLS = ['Granule', 'dt','BL0_meter']
+        print(f'Propose new pair ...')
         for pair in self.TOML.NEW_PAIRS:
-            fr = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[0], ['dt','BL0_meter'] ].iloc[0]
-            to = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[1], ['dt','BL0_meter'] ].iloc[0]
+            fr = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[0],COLS ].iloc[0]
+            to = self.dfScene.loc[ self.dfScene[ 'scene_id']== pair[1],COLS ].iloc[0]
             AX.plot( [fr['dt'],to['dt']],[fr.BL0_meter,to.BL0_meter ],
                         lw=5, color='black', linestyle='--',alpha=0.7) 
-            import pdb; pdb.set_trace()
-        print(pair)
+            print( f'{pair} : {fr.Granule}  ==> {to.Granule}')
+            #import pdb; pdb.set_trace()
 
 #################################################################
 #################################################################
